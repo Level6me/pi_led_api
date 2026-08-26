@@ -1,8 +1,8 @@
 # 🍓 Raspberry Pi LED Control API 详细开发与对接文档 (v2.4)
 
-> **服务地址**: `https://piled.abab.pw` / `http://127.0.0.1:8080`  
-> **交互式调试文档 (Swagger UI)**: `https://piled.abab.pw/docs`  
-> **OpenAPI 规范 (ReDoc)**: `https://piled.abab.pw/redoc`
+> **服务地址**: `https://127.0.0.1:8080` / `http://127.0.0.1:8080`  
+> **交互式调试文档 (Swagger UI)**: `https://127.0.0.1:8080/docs`  
+> **OpenAPI 规范 (ReDoc)**: `https://127.0.0.1:8080/redoc`
 
 ---
 
@@ -53,7 +53,7 @@
   * `off`：⏹️ 熄灭所有通道
 * **cURL 示例**:
   ```bash
-  curl -X POST https://piled.abab.pw/api/state \
+  curl -X POST https://127.0.0.1:8080/api/state \
     -H "X-API-Key: ipad_pro_secret_888" \
     -H "Content-Type: application/json" \
     -d '{"state": "thinking", "duration": 300}'
@@ -63,7 +63,7 @@
 * **端点**: `POST /api/off`
 * **cURL 示例**:
   ```bash
-  curl -X POST https://piled.abab.pw/api/off \
+  curl -X POST https://127.0.0.1:8080/api/off \
     -H "X-API-Key: ipad_pro_secret_888"
   ```
 
@@ -201,5 +201,5 @@
 
 ## 九、WebSocket 实时数据流
 
-* **端点**: `wss://piled.abab.pw/ws/status`
+* **端点**: `wss://127.0.0.1:8080/ws/status`
 * **连接即推送**: 连接成功后自动推送最新的整机快照与物理引脚状态；每当有新调用或状态变更时实时流式广播。
