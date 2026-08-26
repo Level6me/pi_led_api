@@ -1,194 +1,52 @@
-# 🍓 Raspberry Pi LED Control API (树莓派 LED 状态灯 API 控制服务)
+# 🍓 Raspberry Pi LED Control API (v2.4 - Clean Edition)
 
-这是一个基于 **FastAPI** 开发的 RESTful API 服务，旨在提供一个中心化、轻量级、多平台、多设备通用的树莓派 LED 物理指示灯控制接口。它专为解决多个进程/设备竞争控制物理引脚导致的 `GPIO busy` 资源冲突设计。
-
----
-
-## 📐 架构设计
-
-```mermaid
-graph TD
-    Client1[飞书机器人 /feishu-bot] -->|HTTP POST /api/state| API[pi-led-api 服务 :8080]
-    Client2[iOS 快捷指令] -->|HTTP POST /api/led| API
-    Client3[Home Assistant / 浏览器] -->|HTTP GET /api/status| API
-    
-    subgraph 树莓派内部
-        API -->|独占控制| GPIO[GPIO 物理引脚]
-        GPIO -->|驱动| RedLED[🔴 红灯]
-        GPIO -->|驱动| YellowLED[🟡 黄灯]
-        GPIO -->|驱动| GreenLED[🟢 绿灯]
-    end
-```
+> 基于 **FastAPI + AsyncIO** 构建的高性能、多通道、集成 **Apple Abit 悬浮 Dock 栏**、**拟真水晶透镜面板**、**CIE 1931 / Gamma 2.2 视觉平滑呼吸**、**智能倒计时渐暗关灯**、**自定义动效剧场 (Pattern Studio)**、**硬件引脚热重映射**、**审计日志 CSV/JSON 导出** 与 **动态 Token 管理** 的树莓派指示灯中央控制网关服务。
 
 ---
 
-## 🌟 特性
+## 🌟 核心功能特性
 
-1. **资源解耦与独占**：充当树莓派 GPIO 接口的代理守护进程，完美解决 `feishu-bot` 与其他脚本同时控制 GPIO 时引起的 `GPIO busy` 硬件锁定错误。
-2. **丰富的预设系统状态**：
-   - `thinking` (思考中)：常亮黄灯。
-   - `breathing` (执行任务中)：呼吸黄灯。
-   - `restarting` (服务重启中)：闪烁黄灯。
-   - `success` (任务执行完成)：常亮绿灯（支持自定义定时关闭，默认 300 秒）。
-   - `error` (执行出错/强制中止)：常亮红灯。
-   - `startup` (启动就绪)：绿灯快速闪烁 5 次自检。
-   - `off` (关闭)：熄灭所有指示灯。
-3. **单灯自定义精细控制**：支持直接控制单个 LED (`red`、`yellow`、`green`) 执行 `on` (常亮)、`off` (关闭)、`pwm` (任意亮度 `0.0~1.0`)、`blink` (指定频率闪烁)、`breath` (指定频率呼吸)。
-4. **即刻开箱即用**：
-   - 自动检测并改写 Python 虚拟环境（`venv`）中的 [`pyvenv.cfg`](file:///home/user/github/antigravity-feishu-bot/venv/pyvenv.cfg) 配置文件，自动开启系统包继承。
-   - 动态热加载系统级预装的 `gpiozero` 与 `lgpio`，解决在隔离 venv 下直接 `pip install` 缺失底层编译依赖导致失败的问题。
-   - **非树莓派设备兼容**：若在非树莓派设备（如 macOS / Windows）运行，自动降级为 Mock 模拟日志模式，调试不报错。
-5. **CORS 支持**：支持跨域请求，可供前端网页、Home Assistant、iOS 快捷指令直接跨网段请求。
-
----
-
-## ⚙️ 系统依赖准备 (树莓派)
-
-在树莓派上部署前，请确保系统已安装底层的 GPIO 硬件驱动（Raspberry Pi OS 默认已安装）：
-```bash
-sudo apt update
-sudo apt install -y python3-gpiozero python3-lgpio
-```
+1. **🌈 CIE 1931 / Gamma 2.2 视觉亮度校正 & 自然正弦呼吸曲线**：
+   - 彻底告别生硬线性的 PWM 调节，引入幂律人眼感知校正，使暗部渐变更细腻、亮部层次更分明。
+   - 任务执行状态采用连续平滑正弦波呼吸，柔和如苹果呼吸灯。
+2. **🖱️ 拟真面板直接触控交互 (Direct Bulb Touch/Click)**：
+   * 在 Web 面板上直接轻触红/黄/绿灯珠，即可 **0ms 零延迟乐观切换** 开关状态。
+3. **⏱️ 智能倒计时 & 渐暗关灯引擎 (Smart Timers & Fade-Out)**：
+   * 支持指定通道运行倒计时（1分钟、5分钟、25分钟番茄钟等），在倒计时结束前自动平滑减小亮度渐暗至熄灭。
+   * Web 端实时显示倒计时进度条与剩余时间。
+4. **🎭 自定义动效剧场 (Custom Patterns Studio & Store)**：
+   * 支持在线添加多帧动画（配置每帧红黄绿亮度与持续时间），持久化存储至 `data/patterns.json`，一键运行。
+5. **🎛️ 硬件引脚热重映射与电平极性配置 (Hardware Pin Mapping)**：
+   * 支持在 Web 界面随时修改各通道 BCM GPIO 编号、极性（高电平有效/低电平有效）与 Gamma 开关，配置保存在 `data/hardware.json`，免改代码热生效。
+6. **📥 审计调用日志一键导出 (CSV / JSON Export)**：
+   * 支持从 Web 控制台或 API 一键将历史调用记录导出下载为 `.csv` 或 `.json` 文件。
+7. **🛡️ 纯内存本地极速 OAuth2 JWT 鉴权 (<0.05ms)**：
+   * 极速本地优先验签，支持密码登录与多设备专属动态 Token。
 
 ---
 
-## 🚀 一键部署部署
+## 🛠️ API 接口清单
 
-我们提供了一键配置和启动服务的部署脚本 [`deploy.sh`](file:///home/user/github/pi_led_api/deploy.sh)：
-
-```bash
-# 给予执行权限
-chmod +x deploy.sh
-
-# 运行部署脚本
-./deploy.sh
-```
-
-`deploy.sh` 会自动执行以下操作：
-1. 检测当前是否为树莓派环境。
-2. 创建与系统库连通的 Python 虚拟环境 (`venv`)。
-3. 安装依赖包 (`FastAPI`、`Uvicorn`、`Pydantic`)。
-4. **服务自启动注册**：
-   - 如果系统已安装 **PM2**：自动配置并在 PM2 中启动进程 `pi-led-api`。
-   - 如果未安装 PM2：在当前目录生成标准的 **systemd** 服务配置文件 `pi-led-api.service`，并输出注册命令。
-
----
-
-## 📦 手动部署与启动
-
-如果您希望手动部署服务，可参考以下步骤：
-
-```bash
-# 1. 创建虚拟环境 (在树莓派上必须加 --system-site-packages)
-python3 -m venv venv --system-site-packages
-
-# 2. 激活虚拟环境并安装依赖
-source venv/bin/activate
-pip install -r requirements.txt
-
-# 3. 手动启动 Uvicorn 服务 (监听 8080 端口)
-python3 -m uvicorn main:app --host 0.0.0.0 --port 8080
-```
-
----
-
-## 🛠️ API 接口详解
-
-API 交互支持标准的 Swagger UI。服务启动后，可在浏览器中直接打开 `http://<树莓派IP>:8080/docs` 查看并在线调试接口。
-
-### 1. 查询指示灯当前状态
-*   **请求**：`GET /api/status`
-*   **响应 (JSON)**：
-    ```json
-    {
-      "status": "ok",
-      "current_state": "breathing_yellow",
-      "hardware": {
-        "gpio_available": true,
-        "mode": "GPIOZERO_LGPIO",
-        "pins": {
-          "red": 22,
-          "yellow": 27,
-          "green": 17
-        }
-      }
-    }
-    ```
-
-### 2. 设置系统整机状态
-*   **请求**：`POST /api/state`
-*   **请求体 (JSON)**：
-    ```json
-    {
-      "state": "success",
-      "duration": 300
-    }
-    ```
-    *   `state` (必填)：系统状态，可选值：`thinking`, `breathing`, `restarting`, `success`, `error`, `startup`, `off`。
-    *   `duration` (可选，仅在 `success` 下生效)：绿灯自动熄灭时长（秒），默认 300 秒。
-
-### 3. 单灯自定义高级控制
-*   **请求**：`POST /api/led`
-*   **请求体 (JSON)**：
-    ```json
-    {
-      "color": "green",
-      "action": "breath",
-      "value": 0.8,
-      "frequency": 1.5
-    }
-    ```
-    *   `color` (必填)：指定 LED 颜色，可选：`red`、`yellow`、`green`。
-    *   `action` (必填)：执行动作，可选：
-        - `on`：常亮 (1.0 满亮度)。
-        - `off`：常闭 (0.0 亮度)。
-        - `pwm`：设定指定亮度值。
-        - `blink`：指定频率高低电平闪烁。
-        - `breath`：指定频率呼吸。
-    *   `value` (可选，默认 1.0)：亮度，范围 `0.0` 到 `1.0`。
-    *   `frequency` (可选，默认 1.0)：闪烁/呼吸的频率（Hz），范围 `0.1` 到 `10.0`。
-
-### 4. 熄灭所有灯光
-*   **请求**：`POST /api/off`
-
----
-
-## 💻 跨设备调用代码示例
-
-### Shell (cURL)
-```bash
-# 点亮红灯以 3Hz 的高频闪烁（告警通知）
-curl -X POST http://<树莓派IP>:8080/api/led \
-  -H "Content-Type: application/json" \
-  -d '{"color": "red", "action": "blink", "value": 1.0, "frequency": 3.0}'
-
-# 熄灭整机所有灯
-curl -X POST http://<树莓派IP>:8080/api/off
-```
-
-### Python
-```python
-import requests
-
-# 设定为思考中黄灯
-url = "http://<树莓派IP>:8080/api/state"
-requests.post(url, json={"state": "thinking"})
-```
-
-### Node.js (Fetch)
-```javascript
-fetch('http://<树莓派IP>:8080/api/state', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ state: 'success', duration: 10 })
-});
-```
-
-### iOS 快捷指令 (苹果手机控制)
-1. 打开 iOS 快捷指令 App，创建新快捷指令。
-2. 添加“**获取 URL 内容**”操作。
-3. URL 填写：`http://<树莓派局域网IP>:8080/api/state`。
-4. 方法选择 `POST`。
-5. 请求体选择 `JSON`。
-6. 添加键 `state`，类型为文本，值填 `off` (或者其他如 `success`、`thinking`)。
-7. 保存到手机桌面，即可实现用手机无线控制树莓派状态灯！
+| 接口 | 方法 | 鉴权要求 | 说明 |
+| :--- | :--- | :--- | :--- |
+| `/` | `GET` | 无 | Apple Abit 风格现代 Web 控制台 (带悬浮 Dock 与拟真透镜) |
+| `/docs` | `GET` | 无 | Swagger UI 交互式在线调试文档 |
+| `/api/status` | `GET` | 无 | 获取当前整机、各通道、硬件引脚及倒计时状态快照 |
+| `/api/state` | `POST` | 需 Token | 切换系统统一预设状态 (thinking, breathing, success, error, off) |
+| `/api/led` | `POST` | 需 Token | 独立/独占控制单灯通道 (支持 on/off/pwm/blink/breath) |
+| `/api/off` | `POST` | 需 Token | 一键熄灭所有通道 |
+| `/api/timer` | `POST` | 需 Token | 启动智能倒计时 (支持设置结束前平滑渐暗秒数) |
+| `/api/timer` | `DELETE` | 需 Token | 提前取消正在运行的倒计时 |
+| `/api/patterns` | `GET` | 无 | 获取所有内置与自定义动效列表 |
+| `/api/patterns` | `POST` | 需 Token | 保存新的自定义动效帧序列 |
+| `/api/patterns/{name}` | `DELETE` | 需 Token | 删除指定的自定义动效 |
+| `/api/pattern` | `POST` | 需 Token | 运行指定名称或自定义帧的动效 |
+| `/api/hardware/config` | `GET` | 无 | 获取当前硬件引脚及极性配置 |
+| `/api/hardware/config` | `POST` | 需 Token | 动态修改引脚编号与极性并热重载 |
+| `/api/logs` | `GET` | 无 | 查询调用审计记录 (支持 device / status 过滤) |
+| `/api/logs/export` | `GET` | 无 | 导出下载审计日志 (`?format=csv` 或 `?format=json`) |
+| `/api/tokens` | `GET` | 无 | 查询所有已颁发与配置的 Token 列表 |
+| `/api/tokens/create` | `POST` | 需 Token | 在线生成设备专属 API 访问令牌 |
+| `/api/tokens/{id}` | `DELETE` | 需 Token | 撤销并删除指定的动态 Token |
+| `/api/oauth/token` | `POST` | 无 | 密码或设备 Token 换取 JWT 访问令牌 |
+| `/ws/status` | `WebSocket` | 无 | 实时状态与审计日志广播长连接 |

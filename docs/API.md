@@ -15,8 +15,7 @@
 6. [硬件引脚热重映射 (Hardware Config)](#六硬件引脚热重映射)
 7. [调用审计与数据导出 (Audit Logs)](#七调用审计与数据导出)
 8. [访问令牌管理 (Tokens)](#八访问令牌管理)
-9. [Keycloak SSO 统一认证对接](#九keycloak-sso-统一认证对接)
-10. [WebSocket 实时数据流](#十websocket-实时数据流)
+9. [WebSocket 实时数据流](#九websocket-实时数据流)
 
 ---
 
@@ -27,7 +26,7 @@
 | 认证方式 | Header / 请求参数 | 适用场景 |
 | :--- | :--- | :--- |
 | **设备 API-Key（推荐）** | `X-API-Key: <token>` | iOS 快捷指令、群机器人、自动化脚本 |
-| **OAuth2 / Keycloak JWT** | `Authorization: Bearer <jwt>` | Web 控制台、统一 SSO 登录会话 |
+| **OAuth2 JWT Token** | `Authorization: Bearer <jwt>` | Web 控制台、管理员会话 |
 | **URL Query Token** | `?token=<token>` | 简易 GET 请求、不支持自定义 Header 的客户端 |
 
 ---
@@ -200,16 +199,7 @@
 
 ---
 
-## 九、Keycloak SSO 统一认证对接
-
-* **端点**: `GET /api/keycloak/config`
-* **端点**: `POST /api/keycloak/config`
-* **端点**: `POST /api/keycloak/test`
-* **说明**: 支持对接 [keycloak-auth-manager](https://github.com/Level6me/keycloak-auth-manager)，实现集中式 RS256 JWT Token 离线高速验签。
-
----
-
-## 十、WebSocket 实时数据流
+## 九、WebSocket 实时数据流
 
 * **端点**: `wss://piled.abab.pw/ws/status`
 * **连接即推送**: 连接成功后自动推送最新的整机快照与物理引脚状态；每当有新调用或状态变更时实时流式广播。
