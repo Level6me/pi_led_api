@@ -1,0 +1,138 @@
+{
+  "police_alert": {
+    "name": "police_alert",
+    "title": "🚨 警报双闪 (Police Alert)",
+    "repeat": 8,
+    "frames": [
+      {
+        "red": 1.0,
+        "yellow": 0.0,
+        "green": 0.0,
+        "duration": 0.08
+      },
+      {
+        "red": 0.0,
+        "yellow": 0.0,
+        "green": 0.0,
+        "duration": 0.08
+      },
+      {
+        "red": 1.0,
+        "yellow": 0.0,
+        "green": 0.0,
+        "duration": 0.08
+      },
+      {
+        "red": 0.0,
+        "yellow": 0.0,
+        "green": 1.0,
+        "duration": 0.08
+      },
+      {
+        "red": 0.0,
+        "yellow": 0.0,
+        "green": 0.0,
+        "duration": 0.08
+      },
+      {
+        "red": 0.0,
+        "yellow": 0.0,
+        "green": 1.0,
+        "duration": 0.08
+      }
+    ]
+  },
+  "traffic_light": {
+    "name": "traffic_light",
+    "title": "🚦 交通信号灯 (Traffic Light)",
+    "repeat": 3,
+    "frames": [
+      {
+        "red": 1.0,
+        "yellow": 0.0,
+        "green": 0.0,
+        "duration": 1.5
+      },
+      {
+        "red": 0.0,
+        "yellow": 1.0,
+        "green": 0.0,
+        "duration": 0.8
+      },
+      {
+        "red": 0.0,
+        "yellow": 0.0,
+        "green": 1.0,
+        "duration": 1.5
+      }
+    ]
+  },
+  "rainbow_flow": {
+    "name": "rainbow_flow",
+    "title": "🌈 三色流水 (Rainbow Flow)",
+    "repeat": 5,
+    "frames": [
+      {
+        "red": 1.0,
+        "yellow": 0.0,
+        "green": 0.0,
+        "duration": 0.15
+      },
+      {
+        "red": 0.0,
+        "yellow": 1.0,
+        "green": 0.0,
+        "duration": 0.15
+      },
+      {
+        "red": 0.0,
+        "yellow": 0.0,
+        "green": 1.0,
+        "duration": 0.15
+      }
+    ]
+  },
+  "pulse_heartbeat": {
+    "name": "pulse_heartbeat",
+    "title": "💓 心跳脉冲 (Heartbeat)",
+    "repeat": 4,
+    "frames": [
+      {
+        "red": 0.2,
+        "yellow": 0.0,
+        "green": 0.0,
+        "duration": 0.1
+      },
+      {
+        "red": 1.0,
+        "yellow": 0.0,
+        "green": 0.0,
+        "duration": 0.25
+      },
+      {
+        "red": 0.0,
+        "yellow": 0.2,
+        "green": 0.0,
+        "duration": 0.1
+      },
+      {
+        "red": 0.0,
+        "yellow": 1.0,
+        "green": 0.0,
+        "duration": 0.25
+      },
+      {
+        "red": 0.0,
+        "yellow": 0.0,
+        "green": 0.2,
+        "duration": 0.1
+      },
+      {
+        "red": 0.0,
+        "yellow": 0.0,
+        "green": 1.0,
+        "duration": 0.25
+      }
+    ]
+  }
+}

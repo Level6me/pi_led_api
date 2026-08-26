@@ -1,0 +1,10 @@
+{
+  "pins": {
+    "red": 22,
+    "yellow": 27,
+    "green": 17
+  },
+  "active_high": true,
+  "gamma_correction": true,
+  "gamma_value": 2.2
+}

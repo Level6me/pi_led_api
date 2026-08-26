@@ -1,0 +1,763 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>🍓 Pi LED Controller — Apple Abit UI (v2.4)</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="toast">
+    <span id="toast-msg">提示信息</span>
+  </div>
+
+  <!-- Frosted Navigation Header -->
+  <header class="app-header">
+    <div class="header-inner">
+      <div class="brand">
+        <span class="brand-icon">🍓</span>
+        <span>Pi LED Console</span>
+        <span id="hardware-badge" class="badge badge-neutral" onclick="openHardwareModal()" style="cursor:pointer;" title="点击配置硬件引脚">GPIO: Loading...</span>
+      </div>
+
+      <div class="header-actions" style="display: flex; align-items: center; gap: 10px;">
+        <span id="ws-badge" class="badge badge-success">
+          <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#34c759;"></span> 实时在线
+        </span>
+
+        <button id="btn-theme" class="btn-preset" style="padding: 7px; border-radius: 50%; width: 36px; height: 36px; display: flex; justify-content: center; align-items: center;" title="切换主题">
+          🌙
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content Wrapper -->
+  <main class="main-wrapper">
+
+    <!-- ==================== TAB 1: 物理指示灯控制台 ==================== -->
+    <div id="view-control" class="view-section active">
+      
+      <!-- 1. Physical LED Visual Simulation Stage (Clickable & Interactive) -->
+      <section class="glass led-stage">
+        <div style="display: flex; justify-content: space-between; width: 100%; align-items: center; margin-bottom: 8px;">
+          <span style="font-size: 0.85rem; font-weight: 700; color: var(--text-sec); text-transform: uppercase; letter-spacing: 0.05em;">硬件实时映射面板 (点击灯泡即时开关)</span>
+          <span id="current-state-badge" class="badge badge-neutral">⏹️ 全部熄灭 (Off)</span>
+        </div>
+
+        <div class="led-matrix">
+          <!-- Red LED -->
+          <div class="led-item" onclick="toggleBulbColor('red')" title="点击快速开关红灯">
+            <div id="bulb-red" class="led-bulb red"></div>
+            <span class="led-label">🔴 红色</span>
+            <span id="bulb-level-red" style="font-size: 0.72rem; color: var(--text-sec); font-weight: 600;">关闭</span>
+          </div>
+
+          <!-- Yellow LED -->
+          <div class="led-item" onclick="toggleBulbColor('yellow')" title="点击快速开关黄灯">
+            <div id="bulb-yellow" class="led-bulb yellow"></div>
+            <span class="led-label">🟡 黄色</span>
+            <span id="bulb-level-yellow" style="font-size: 0.72rem; color: var(--text-sec); font-weight: 600;">关闭</span>
+          </div>
+
+          <!-- Green LED -->
+          <div class="led-item" onclick="toggleBulbColor('green')" title="点击快速开关绿灯">
+            <div id="bulb-green" class="led-bulb green"></div>
+            <span class="led-label">🟢 绿色</span>
+            <span id="bulb-level-green" style="font-size: 0.72rem; color: var(--text-sec); font-weight: 600;">关闭</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- 2. Smart Timer & Countdown Card (NEW) -->
+      <section id="smart-timer-section" class="glass" style="padding: 16px 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+          <div>
+            <h3 style="font-weight: 700; font-size: 1.02rem; display: flex; align-items: center; gap: 8px;">
+              ⏱️ 智能倒计时 & 渐暗关灯
+            </h3>
+            <p style="font-size: 0.8rem; color: var(--text-sec);">设定计时运行时长，结束前最后 5 秒自动平滑渐暗熄灭。</p>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span id="timer-badge" class="badge badge-neutral">未激活</span>
+            <button id="btn-cancel-timer" class="filter-pill" style="color:var(--danger); display:none;" onclick="cancelActiveTimer()">取消计时</button>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap;">
+          <button class="filter-pill" onclick="startQuickTimer('green', 60)">🟢 专注 1 分钟</button>
+          <button class="filter-pill" onclick="startQuickTimer('green', 300)">🟢 专注 5 分钟</button>
+          <button class="filter-pill" onclick="startQuickTimer('green', 1500)">🟢 番茄钟 25 分钟</button>
+          <button class="filter-pill" onclick="startQuickTimer('yellow', 180)">🟡 休息 3 分钟</button>
+        </div>
+
+        <div id="timer-progress-wrap" class="timer-progress-bg" style="display:none;">
+          <div id="timer-progress-bar" class="timer-progress-bar"></div>
+        </div>
+      </section>
+
+      <!-- 3. System Presets Quick Actions -->
+      <section>
+        <h2 class="section-title">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+          系统预设状态 (CIE 1931 自然正弦呼吸)
+        </h2>
+        <div class="grid-presets">
+          <button class="btn-preset" onclick="triggerPreset('thinking')">
+            <span style="font-size: 1.3rem;">🟡</span>
+            <span>思考中</span>
+            <span style="font-size: 0.7rem; color: var(--text-sec);">常亮黄灯</span>
+          </button>
+
+          <button class="btn-preset" onclick="triggerPreset('breathing')">
+            <span style="font-size: 1.3rem;">✨</span>
+            <span>任务执行</span>
+            <span style="font-size: 0.7rem; color: var(--text-sec);">正弦呼吸黄灯</span>
+          </button>
+
+          <button class="btn-preset" onclick="triggerPreset('restarting')">
+            <span style="font-size: 1.3rem;">⚡</span>
+            <span>重启中</span>
+            <span style="font-size: 0.7rem; color: var(--text-sec);">闪烁黄灯</span>
+          </button>
+
+          <button class="btn-preset" onclick="triggerPreset('success', 300)">
+            <span style="font-size: 1.3rem;">🟢</span>
+            <span>成功完成</span>
+            <span style="font-size: 0.7rem; color: var(--text-sec);">常亮绿灯 300s</span>
+          </button>
+
+          <button class="btn-preset" onclick="triggerPreset('error')">
+            <span style="font-size: 1.3rem;">🔴</span>
+            <span>系统异常</span>
+            <span style="font-size: 0.7rem; color: var(--text-sec);">常亮红灯</span>
+          </button>
+
+          <button class="btn-preset" onclick="triggerPreset('startup')">
+            <span style="font-size: 1.3rem;">🔄</span>
+            <span>开机自检</span>
+            <span style="font-size: 0.7rem; color: var(--text-sec);">绿灯连闪 5 次</span>
+          </button>
+
+          <button class="btn-preset danger-btn" onclick="turnOffAll()">
+            <span style="font-size: 1.3rem;">⏹️</span>
+            <span>熄灭全灯</span>
+            <span style="font-size: 0.7rem; color: var(--text-sec);">关闭所有通道</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- 4. Dynamic Animation Patterns & Pattern Store -->
+      <section>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <h2 class="section-title" style="margin-bottom: 0;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            动效剧场 & 自定义动效库
+          </h2>
+          <button class="filter-pill" onclick="openCreatePatternModal()" style="border-color:var(--accent); color:var(--accent);">➕ 新建自定义动效</button>
+        </div>
+
+        <div id="patterns-container" class="pattern-bar">
+          <!-- Dynamically loaded from /api/patterns -->
+          <button class="btn-pattern" onclick="triggerPattern('police_alert')">🚨 警报双闪 (Police)</button>
+          <button class="btn-pattern" onclick="triggerPattern('traffic_light')">🚦 交通信号灯 (Traffic)</button>
+          <button class="btn-pattern" onclick="triggerPattern('rainbow_flow')">🌈 三色跑马流水 (Flow)</button>
+          <button class="btn-pattern" onclick="triggerPattern('pulse_heartbeat')">💓 依次心跳脉冲 (Pulse)</button>
+        </div>
+      </section>
+
+      <!-- 5. Three Channel Independent Fine Controls -->
+      <section>
+        <h2 class="section-title">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>
+          单灯独立高级调控 (Gamma 2.2 视觉平滑)
+        </h2>
+        
+        <div class="grid-channels">
+          
+          <!-- Red Channel Card -->
+          <div class="glass channel-card">
+            <div class="channel-header">
+              <div class="channel-name" style="color: var(--danger);">
+                <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--danger);"></span>
+                红色通道 (Red)
+              </div>
+              <span id="pin-label-red" style="font-size: 0.75rem; color: var(--text-sec); font-weight: 600;">GPIO 22</span>
+            </div>
+
+            <div class="segmented-control">
+              <button class="segment-btn seg-red" data-action="on" onclick="triggerChannel('red', 'on')">常亮</button>
+              <button class="segment-btn seg-red" data-action="off" onclick="triggerChannel('red', 'off')">关闭</button>
+              <button class="segment-btn seg-red" data-action="blink" onclick="triggerChannel('red', 'blink')">闪烁</button>
+              <button class="segment-btn seg-red" data-action="breath" onclick="triggerChannel('red', 'breath')">呼吸</button>
+            </div>
+
+            <div class="slider-group">
+              <div class="slider-header">
+                <span>PWM 亮度控制</span>
+                <span id="slider-val-red">100%</span>
+              </div>
+              <input type="range" id="slider-red" min="0" max="1" step="0.01" value="1">
+            </div>
+
+            <div class="slider-group">
+              <div class="slider-header">
+                <span>闪烁 / 呼吸频率</span>
+                <span id="freq-val-red">1.0 Hz</span>
+              </div>
+              <input type="range" id="freq-red" min="0.2" max="5.0" step="0.1" value="1.0">
+            </div>
+          </div>
+
+          <!-- Yellow Channel Card -->
+          <div class="glass channel-card">
+            <div class="channel-header">
+              <div class="channel-name" style="color: var(--warning);">
+                <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--warning);"></span>
+                黄色通道 (Yellow)
+              </div>
+              <span id="pin-label-yellow" style="font-size: 0.75rem; color: var(--text-sec); font-weight: 600;">GPIO 27</span>
+            </div>
+
+            <div class="segmented-control">
+              <button class="segment-btn seg-yellow" data-action="on" onclick="triggerChannel('yellow', 'on')">常亮</button>
+              <button class="segment-btn seg-yellow" data-action="off" onclick="triggerChannel('yellow', 'off')">关闭</button>
+              <button class="segment-btn seg-yellow" data-action="blink" onclick="triggerChannel('yellow', 'blink')">闪烁</button>
+              <button class="segment-btn seg-yellow" data-action="breath" onclick="triggerChannel('yellow', 'breath')">呼吸</button>
+            </div>
+
+            <div class="slider-group">
+              <div class="slider-header">
+                <span>PWM 亮度控制</span>
+                <span id="slider-val-yellow">100%</span>
+              </div>
+              <input type="range" id="slider-yellow" min="0" max="1" step="0.01" value="1">
+            </div>
+
+            <div class="slider-group">
+              <div class="slider-header">
+                <span>闪烁 / 呼吸频率</span>
+                <span id="freq-val-yellow">1.0 Hz</span>
+              </div>
+              <input type="range" id="freq-yellow" min="0.2" max="5.0" step="0.1" value="1.0">
+            </div>
+          </div>
+
+          <!-- Green Channel Card -->
+          <div class="glass channel-card">
+            <div class="channel-header">
+              <div class="channel-name" style="color: var(--success);">
+                <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--success);"></span>
+                绿色通道 (Green)
+              </div>
+              <span id="pin-label-green" style="font-size: 0.75rem; color: var(--text-sec); font-weight: 600;">GPIO 17</span>
+            </div>
+
+            <div class="segmented-control">
+              <button class="segment-btn seg-green" data-action="on" onclick="triggerChannel('green', 'on')">常亮</button>
+              <button class="segment-btn seg-green" data-action="off" onclick="triggerChannel('green', 'off')">关闭</button>
+              <button class="segment-btn seg-green" data-action="blink" onclick="triggerChannel('green', 'blink')">闪烁</button>
+              <button class="segment-btn seg-green" data-action="breath" onclick="triggerChannel('green', 'breath')">呼吸</button>
+            </div>
+
+            <div class="slider-group">
+              <div class="slider-header">
+                <span>PWM 亮度控制</span>
+                <span id="slider-val-green">100%</span>
+              </div>
+              <input type="range" id="slider-green" min="0" max="1" step="0.01" value="1">
+            </div>
+
+            <div class="slider-group">
+              <div class="slider-header">
+                <span>闪烁 / 呼吸频率</span>
+                <span id="freq-val-green">1.0 Hz</span>
+              </div>
+              <input type="range" id="freq-green" min="0.2" max="5.0" step="0.1" value="1.0">
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+    </div>
+
+    <!-- ==================== TAB 2: 图表统计与硬件中心 ==================== -->
+    <div id="view-charts" class="view-section">
+      
+      <!-- Key Metric Cards -->
+      <div class="grid-stats">
+        <div class="glass stat-card">
+          <span class="stat-label">📈 累计调用总数</span>
+          <span id="stat-total-calls" class="stat-value">0</span>
+        </div>
+
+        <div class="glass stat-card">
+          <span class="stat-label">🎯 请求成功率</span>
+          <span id="stat-success-rate" class="stat-value" style="color: var(--success);">100%</span>
+        </div>
+
+        <div class="glass stat-card">
+          <span class="stat-label">🌡️ 树莓派 CPU 温度</span>
+          <span id="stat-temp" class="stat-value" style="color: var(--warning);">--°C</span>
+        </div>
+
+        <div class="glass stat-card">
+          <span class="stat-label">⚡ 处理器 CPU 负载</span>
+          <span id="stat-cpu-percent" class="stat-value">0%</span>
+        </div>
+
+        <div class="glass stat-card">
+          <span class="stat-label">💾 系统内存占用</span>
+          <span id="stat-ram-percent" class="stat-value">0%</span>
+        </div>
+      </div>
+
+      <!-- Charts Grid -->
+      <div class="grid-charts">
+        
+        <!-- Hourly Trend Chart -->
+        <div class="glass chart-card" style="grid-column: 1 / -1;">
+          <div class="chart-header">
+            <span class="chart-title">📊 24 小时调用频次走势 (Hourly Trend)</span>
+            <button id="btn-refresh-charts" class="filter-pill">🔄 刷新图表</button>
+          </div>
+          <div class="chart-container">
+            <canvas id="chart-hourly-trend"></canvas>
+          </div>
+        </div>
+
+        <!-- Device Distribution -->
+        <div class="glass chart-card">
+          <div class="chart-header">
+            <span class="chart-title">📱 调用设备分布 (Device Breakdown)</span>
+          </div>
+          <div class="chart-container">
+            <canvas id="chart-device-dist"></canvas>
+          </div>
+        </div>
+
+        <!-- State Breakdown -->
+        <div class="glass chart-card">
+          <div class="chart-header">
+            <span class="chart-title">💡 状态灯触发类型分布 (State Breakdown)</span>
+          </div>
+          <div class="chart-container">
+            <canvas id="chart-state-dist"></canvas>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- ==================== TAB 3: 设备调用审计日志 ==================== -->
+    <div id="view-logs" class="view-section">
+      <section class="glass" style="padding: 20px;">
+        <div class="log-toolbar">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <h2 class="section-title" style="margin-bottom: 0;">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+              设备调用审计记录
+            </h2>
+            <span id="log-count-badge" class="badge badge-neutral">0 条记录</span>
+          </div>
+
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <button class="filter-pill" onclick="exportLogs('csv')">📥 导出 CSV</button>
+            <button class="filter-pill" onclick="exportLogs('json')">📥 导出 JSON</button>
+            <button id="btn-refresh-logs" class="filter-pill">🔄 刷新</button>
+            <button id="btn-clear-logs" class="filter-pill" style="color: var(--danger);">🗑️ 清空</button>
+          </div>
+        </div>
+
+        <!-- Device Filter Tabs -->
+        <div id="device-filter-pills" class="log-filters" style="margin-bottom: 12px;">
+          <button class="filter-pill active" onclick="setDeviceFilter('all')">全部设备</button>
+        </div>
+
+        <!-- Log Items Container -->
+        <div id="audit-log-list" class="log-list">
+          <div style="text-align: center; padding: 24px 0; color: var(--text-sec); font-size: 0.88rem;">正在加载调用记录...</div>
+        </div>
+      </section>
+    </div>
+
+    <!-- ==================== TAB 4: OAuth2 认证、Keycloak 与令牌管理 ==================== -->
+    <div id="view-auth" class="view-section">
+      <div style="display: flex; flex-direction: column; gap: 16px;">
+        
+        <!-- Hardware Settings Card (NEW) -->
+        <div class="glass" style="padding: 16px 20px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span style="font-size: 1.3rem;">🎛️</span>
+              <div>
+                <h3 style="font-weight: 700; font-size: 1.05rem;">硬件引脚重映射与电平极性配置</h3>
+                <p style="font-size: 0.82rem; color: var(--text-sec);">随时重设 BCM GPIO 编号、极性与 Gamma 视觉感知校正。</p>
+              </div>
+            </div>
+            
+            <button class="btn-preset" onclick="openHardwareModal()" style="padding: 6px 14px; flex-direction: row; gap: 4px;">
+              <span>⚙️</span>
+              <span>配置硬件引脚</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Keycloak SSO Integration Card -->
+        <div class="glass" style="padding: 16px 20px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 8px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span style="font-size: 1.3rem;">🛡️</span>
+              <div>
+                <h3 style="font-weight: 700; font-size: 1.05rem;">Keycloak 统一身份认证 (OIDC / SSO)</h3>
+                <p style="font-size: 0.82rem; color: var(--text-sec);">对接 Keycloak Auth Manager，支持 RS256 JWT 验签与统一单点登录。</p>
+              </div>
+            </div>
+            
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span id="keycloak-status-badge" class="badge badge-neutral">⚪ 正在检测...</span>
+              <button class="btn-preset" onclick="openKeycloakModal()" style="padding: 6px 14px; flex-direction: row; gap: 4px;">
+                <span>⚙️</span>
+                <span>配置 SSO</span>
+              </button>
+            </div>
+          </div>
+
+          <div id="keycloak-status-info" style="margin-top: 6px;"></div>
+        </div>
+
+        <!-- Tokens Management Header & Create Button -->
+        <div class="glass" style="padding: 16px 20px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 14px;">
+            <div>
+              <h3 style="font-weight: 700; font-size: 1.05rem;">🔑 API 访问令牌与设备管理</h3>
+              <p style="font-size: 0.82rem; color: var(--text-sec);">为不同客户端生成专属 Token，实现精准身份识别与访问控制。</p>
+            </div>
+            
+            <div style="display: flex; gap: 8px;">
+              <button class="filter-pill" onclick="fetchTokensList()">🔄 刷新列表</button>
+              <button class="btn-preset" onclick="openCreateTokenModal()" style="background: var(--accent); color: #fff; border-color: var(--accent); padding: 8px 18px; flex-direction: row; gap: 6px;">
+                <span style="font-size: 1rem;">➕</span>
+                <span>创建新 Token</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Tokens Card List -->
+          <div id="tokens-card-list" class="tokens-grid">
+            <div style="text-align: center; padding: 20px; color: var(--text-sec);">正在加载令牌数据...</div>
+          </div>
+        </div>
+
+        <!-- OAuth2 Login Card -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px;">
+          
+          <div class="glass auth-card" style="padding: 20px;">
+            <h3 style="font-weight:700; font-size:1.05rem; display:flex; align-items:center; gap:8px; margin-bottom: 6px;">
+              🔐 OAuth2 / 密码凭据登录
+            </h3>
+            <p style="font-size:0.84rem; color:var(--text-sec); margin-bottom: 14px;">
+              支持使用管理员账号密码（<code>admin / admin888</code>）或设备 Token 换取 <code>JWT Bearer Access Token</code>。
+            </p>
+
+            <form id="oauth-form" style="display:flex; flex-direction:column; gap:12px;">
+              <div>
+                <label style="font-size:0.8rem; font-weight:600; color:var(--text-sec); display:block; margin-bottom:4px;">用户名 / 账号 (Username)</label>
+                <input type="text" id="oauth-username" class="input-field" value="admin" placeholder="输入管理员用户名">
+              </div>
+
+              <div>
+                <label style="font-size:0.8rem; font-weight:600; color:var(--text-sec); display:block; margin-bottom:4px;">密码 / 设备 Token</label>
+                <input type="password" id="oauth-password" class="input-field" placeholder="输入密码或设备令牌" required>
+              </div>
+
+              <button type="submit" class="btn-preset" style="background:var(--accent); color:#fff; border-color:var(--accent); padding:12px; margin-top:6px;">
+                登录并颁发 JWT 令牌
+              </button>
+            </form>
+          </div>
+
+          <div class="glass auth-card" style="padding: 20px;">
+            <h3 style="font-weight:700; font-size:1.05rem; display:flex; align-items:center; gap:8px; margin-bottom: 10px;">
+              👤 当前认证身份状态
+            </h3>
+            <div id="auth-user-info" style="display: flex; flex-direction: column; gap: 8px;"></div>
+          </div>
+
+        </div>
+
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ==================== Floating Glass Dock ==================== -->
+  <div class="dock">
+    <button class="dock-btn active" data-tab="control" onclick="switchTab('control', '总览', this)">
+      <svg viewBox="0 0 24 24"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8v-10h-8v10zm0-18v6h8V3h-8z"/></svg>
+      <span>总览</span>
+    </button>
+    <button class="dock-btn" data-tab="charts" onclick="switchTab('charts', '图表', this)">
+      <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/></svg>
+      <span>图表</span>
+    </button>
+    <button class="dock-btn" data-tab="logs" onclick="switchTab('logs', '审计', this)">
+      <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+      <span>审计</span>
+    </button>
+    <button class="dock-btn" data-tab="auth" onclick="switchTab('auth', '令牌', this)">
+      <svg viewBox="0 0 24 24"><path d="M12.65 10C11.83 7.67 9.61 6 7 6c-3.31 0-6 2.69-6 6s2.69 6 6 6c2.61 0 4.83-1.67 5.65-4H17v4h4v-4h2v-4H12.65zM7 14c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z"/></svg>
+      <span>令牌</span>
+    </button>
+  </div>
+
+  <!-- Modal: Hardware Pin Configuration (NEW) -->
+  <div id="hardware-modal" class="modal-overlay">
+    <div class="modal-card">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <h3 style="font-weight:700; font-size:1.1rem; display:flex; align-items:center; gap:8px;">
+          🎛️ 硬件引脚与极性配置
+        </h3>
+        <button onclick="closeHardwareModal()" style="background:none; border:none; color:var(--text-sec); cursor:pointer; font-size:1.2rem;">✕</button>
+      </div>
+
+      <form id="form-hardware-config" style="display:flex; flex-direction:column; gap:12px;">
+        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px;">
+          <div>
+            <label style="font-size:0.8rem; font-weight:600; color:var(--danger); display:block; margin-bottom:4px;">🔴 红色 BCM</label>
+            <input type="number" id="input-pin-red" class="input-field" value="22" required>
+          </div>
+          <div>
+            <label style="font-size:0.8rem; font-weight:600; color:var(--warning); display:block; margin-bottom:4px;">🟡 黄色 BCM</label>
+            <input type="number" id="input-pin-yellow" class="input-field" value="27" required>
+          </div>
+          <div>
+            <label style="font-size:0.8rem; font-weight:600; color:var(--success); display:block; margin-bottom:4px;">🟢 绿色 BCM</label>
+            <input type="number" id="input-pin-green" class="input-field" value="17" required>
+          </div>
+        </div>
+
+        <div style="display:flex; align-items:center; gap:8px; padding: 4px 0;">
+          <input type="checkbox" id="input-hw-activehigh" checked style="width:18px; height:18px; accent-color:var(--accent);">
+          <label for="input-hw-activehigh" style="font-size:0.84rem; font-weight:600; cursor:pointer;">
+            高电平有效 (共阴极 LED / Active High)
+          </label>
+        </div>
+
+        <div style="display:flex; align-items:center; gap:8px; padding: 4px 0;">
+          <input type="checkbox" id="input-hw-gamma" checked style="width:18px; height:18px; accent-color:var(--accent);">
+          <label for="input-hw-gamma" style="font-size:0.84rem; font-weight:600; cursor:pointer;">
+            启用 CIE 1931 / Gamma 2.2 视觉感知平滑校正
+          </label>
+        </div>
+
+        <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:8px;">
+          <button type="button" class="btn-preset" onclick="closeHardwareModal()" style="padding:8px 16px;">取消</button>
+          <button type="submit" class="btn-preset" style="background:var(--accent); color:#fff; border-color:var(--accent); padding:8px 20px;">
+            保存并热重载引脚
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Custom Pattern Studio (NEW) -->
+  <div id="pattern-modal" class="modal-overlay">
+    <div class="modal-card" style="max-width: 540px;">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <h3 style="font-weight:700; font-size:1.1rem; display:flex; align-items:center; gap:8px;">
+          🎭 创建自定义动效 (Pattern Studio)
+        </h3>
+        <button onclick="closeCreatePatternModal()" style="background:none; border:none; color:var(--text-sec); cursor:pointer; font-size:1.2rem;">✕</button>
+      </div>
+
+      <form id="form-create-pattern" style="display:flex; flex-direction:column; gap:12px;">
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+          <div>
+            <label style="font-size:0.8rem; font-weight:600; color:var(--text-sec); display:block; margin-bottom:4px;">动效标识 (英文ID) *</label>
+            <input type="text" id="input-pattern-id" class="input-field" placeholder="例如: my_disco" required>
+          </div>
+          <div>
+            <label style="font-size:0.8rem; font-weight:600; color:var(--text-sec); display:block; margin-bottom:4px;">动效标题 *</label>
+            <input type="text" id="input-pattern-title" class="input-field" placeholder="例如: 🪩 迪斯科炫彩" required>
+          </div>
+        </div>
+
+        <div>
+          <label style="font-size:0.8rem; font-weight:600; color:var(--text-sec); display:block; margin-bottom:4px;">循环次数 (Repeat)</label>
+          <input type="number" id="input-pattern-repeat" class="input-field" value="5" min="1" max="50">
+        </div>
+
+        <div>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <label style="font-size:0.8rem; font-weight:600; color:var(--text-sec);">动效时间轴帧序列 (Frames)</label>
+            <button type="button" class="filter-pill" onclick="addPatternFrameRow()" style="padding:2px 8px; font-size:0.75rem;">➕ 添加帧</button>
+          </div>
+          
+          <div id="pattern-frames-list" style="display:flex; flex-direction:column; gap:6px; max-height: 200px; overflow-y:auto; padding:4px;"></div>
+        </div>
+
+        <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:8px;">
+          <button type="button" class="btn-preset" onclick="closeCreatePatternModal()" style="padding:8px 16px;">取消</button>
+          <button type="submit" class="btn-preset" style="background:var(--accent); color:#fff; border-color:var(--accent); padding:8px 20px;">
+            保存动效
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Configure Keycloak SSO -->
+  <div id="keycloak-modal" class="modal-overlay">
+    <div class="modal-card">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <h3 style="font-weight:700; font-size:1.1rem; display:flex; align-items:center; gap:8px;">
+          🛡️ 配置 Keycloak Auth Manager 对接
+        </h3>
+        <button onclick="closeKeycloakModal()" style="background:none; border:none; color:var(--text-sec); cursor:pointer; font-size:1.2rem;">✕</button>
+      </div>
+
+      <form id="form-keycloak-config" style="display:flex; flex-direction:column; gap:12px;">
+        <div style="display:flex; align-items:center; gap:8px; padding: 4px 0;">
+          <input type="checkbox" id="input-kc-enabled" style="width:18px; height:18px; accent-color:var(--accent);">
+          <label for="input-kc-enabled" style="font-size:0.86rem; font-weight:600; cursor:pointer;">
+            启用 Keycloak OIDC / JWT 统一鉴权
+          </label>
+        </div>
+
+        <div>
+          <label style="font-size:0.82rem; font-weight:600; color:var(--text-sec); display:block; margin-bottom:4px;">
+            Keycloak 服务器 URL *
+          </label>
+          <input type="url" id="input-kc-url" class="input-field" placeholder="例如：https://auth.abab.pw" required>
+        </div>
+
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+          <div>
+            <label style="font-size:0.82rem; font-weight:600; color:var(--text-sec); display:block; margin-bottom:4px;">
+              Realm 领域名称 *
+            </label>
+            <input type="text" id="input-kc-realm" class="input-field" value="master" required>
+          </div>
+
+          <div>
+            <label style="font-size:0.82rem; font-weight:600; color:var(--text-sec); display:block; margin-bottom:4px;">
+              Client ID 客户端 ID *
+            </label>
+            <input type="text" id="input-kc-clientid" class="input-field" value="pi-led-api" required>
+          </div>
+        </div>
+
+        <div>
+          <label style="font-size:0.82rem; font-weight:600; color:var(--text-sec); display:block; margin-bottom:4px;">
+            Client Secret 密钥 (可选)
+          </label>
+          <input type="password" id="input-kc-secret" class="input-field" placeholder="若为 Confidential Client 则填写">
+        </div>
+
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
+          <button type="button" class="filter-pill" onclick="testKeycloakConnection()">
+            🔌 测试服务器连接
+          </button>
+          
+          <div style="display:flex; gap:10px;">
+            <button type="button" class="btn-preset" onclick="closeKeycloakModal()" style="padding:8px 16px;">取消</button>
+            <button type="submit" class="btn-preset" style="background:var(--accent); color:#fff; border-color:var(--accent); padding:8px 20px;">
+              保存配置
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Create New Token -->
+  <div id="create-token-modal" class="modal-overlay">
+    <div class="modal-card">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <h3 style="font-weight:700; font-size:1.1rem; display:flex; align-items:center; gap:8px;">
+          ➕ 创建新访问令牌 (Device Token)
+        </h3>
+        <button onclick="closeCreateTokenModal()" style="background:none; border:none; color:var(--text-sec); cursor:pointer; font-size:1.2rem;">✕</button>
+      </div>
+
+      <form id="form-create-token" style="display:flex; flex-direction:column; gap:14px;">
+        <div>
+          <label style="font-size:0.82rem; font-weight:600; color:var(--text-sec); display:block; margin-bottom:6px;">
+            设备 / 服务显示名称 *
+          </label>
+          <input type="text" id="input-token-devicename" class="input-field" placeholder="例如：客厅 iPad 快捷指令、飞书群助手" required>
+        </div>
+
+        <div>
+          <label style="font-size:0.82rem; font-weight:600; color:var(--text-sec); display:block; margin-bottom:6px;">
+            自定义 Token 密钥 (可选)
+          </label>
+          <input type="text" id="input-token-custom" class="input-field" placeholder="留空则自动生成高强度安全随机密钥">
+        </div>
+
+        <div>
+          <label style="font-size:0.82rem; font-weight:600; color:var(--text-sec); display:block; margin-bottom:6px;">
+            有效期限 (天)
+          </label>
+          <select id="input-token-expires" class="input-field">
+            <option value="0">永久有效 (0 天)</option>
+            <option value="30">30 天</option>
+            <option value="90">90 天</option>
+            <option value="365">1 年 (365 天)</option>
+          </select>
+        </div>
+
+        <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:8px;">
+          <button type="button" class="btn-preset" onclick="closeCreateTokenModal()" style="padding:10px 18px;">取消</button>
+          <button type="submit" class="btn-preset" style="background:var(--accent); color:#fff; border-color:var(--accent); padding:10px 20px;">
+            立即创建
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Token Created Successfully -->
+  <div id="token-success-modal" class="modal-overlay">
+    <div class="modal-card">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <h3 style="font-weight:700; font-size:1.1rem; color:var(--success); display:flex; align-items:center; gap:8px;">
+          ✨ Token 创建成功
+        </h3>
+        <button onclick="closeTokenSuccessModal()" style="background:none; border:none; color:var(--text-sec); cursor:pointer; font-size:1.2rem;">✕</button>
+      </div>
+
+      <p style="font-size:0.85rem; color:var(--text-sec); line-height:1.5;">
+        请妥善保存以下 Token 令牌。为安全起见，完整令牌仅在此展示一次：
+      </p>
+
+      <div style="display:flex; gap:8px;">
+        <input type="text" id="success-modal-token" class="input-field" readonly style="font-family:monospace; font-size:0.85rem;">
+        <button class="btn-preset" onclick="copyToClipboard($('#success-modal-token').value)" style="background:var(--accent); color:#fff; border-color:var(--accent); padding:0 16px;">
+          复制
+        </button>
+      </div>
+
+      <div style="font-size:0.82rem; color:var(--text-sec); display:flex; flex-direction:column; gap:4px; background:var(--card-sec); padding:12px; border-radius:var(--radius-sm);">
+        <div>关联设备: <strong id="success-modal-device" style="color:var(--text);"></strong></div>
+        <div>创建时间: <span id="success-modal-created"></span></div>
+      </div>
+
+      <div style="display:flex; justify-content:flex-end; margin-top:8px;">
+        <button class="btn-preset" onclick="closeTokenSuccessModal()" style="padding:10px 24px; background:var(--accent); color:#fff; border-color:var(--accent);">
+          完成
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
