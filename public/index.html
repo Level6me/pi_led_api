@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>🍓 Pi LED Controller — Apple Abit UI (v2.4)</title>
+  <title>🍓 Pi LED Controller — Apple Abit UI</title>
   <link rel="stylesheet" href="/static/css/style.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -72,7 +72,7 @@
         </div>
       </section>
 
-      <!-- 2. Smart Timer & Countdown Card (NEW) -->
+      <!-- 2. Smart Timer & Countdown Card -->
       <section id="smart-timer-section" class="glass" style="padding: 16px 20px;">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
           <div>
@@ -162,7 +162,6 @@
         </div>
 
         <div id="patterns-container" class="pattern-bar">
-          <!-- Dynamically loaded from /api/patterns -->
           <button class="btn-pattern" onclick="triggerPattern('police_alert')">🚨 警报双闪 (Police)</button>
           <button class="btn-pattern" onclick="triggerPattern('traffic_light')">🚦 交通信号灯 (Traffic)</button>
           <button class="btn-pattern" onclick="triggerPattern('rainbow_flow')">🌈 三色跑马流水 (Flow)</button>
@@ -387,11 +386,11 @@
       </section>
     </div>
 
-    <!-- ==================== TAB 4: OAuth2 认证、Keycloak 与令牌管理 ==================== -->
+    <!-- ==================== TAB 4: OAuth2 认证与令牌管理 ==================== -->
     <div id="view-auth" class="view-section">
       <div style="display: flex; flex-direction: column; gap: 16px;">
         
-        <!-- Hardware Settings Card (NEW) -->
+        <!-- Hardware Settings Card -->
         <div class="glass" style="padding: 16px 20px;">
           <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
             <div style="display: flex; align-items: center; gap: 10px;">
@@ -407,29 +406,6 @@
               <span>配置硬件引脚</span>
             </button>
           </div>
-        </div>
-
-        <!-- Keycloak SSO Integration Card -->
-        <div class="glass" style="padding: 16px 20px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 8px;">
-            <div style="display: flex; align-items: center; gap: 10px;">
-              <span style="font-size: 1.3rem;">🛡️</span>
-              <div>
-                <h3 style="font-weight: 700; font-size: 1.05rem;">Keycloak 统一身份认证 (OIDC / SSO)</h3>
-                <p style="font-size: 0.82rem; color: var(--text-sec);">对接 Keycloak Auth Manager，支持 RS256 JWT 验签与统一单点登录。</p>
-              </div>
-            </div>
-            
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <span id="keycloak-status-badge" class="badge badge-neutral">⚪ 正在检测...</span>
-              <button class="btn-preset" onclick="openKeycloakModal()" style="padding: 6px 14px; flex-direction: row; gap: 4px;">
-                <span>⚙️</span>
-                <span>配置 SSO</span>
-              </button>
-            </div>
-          </div>
-
-          <div id="keycloak-status-info" style="margin-top: 6px;"></div>
         </div>
 
         <!-- Tokens Management Header & Create Button -->
@@ -517,7 +493,7 @@
     </button>
   </div>
 
-  <!-- Modal: Hardware Pin Configuration (NEW) -->
+  <!-- Modal: Hardware Pin Configuration -->
   <div id="hardware-modal" class="modal-overlay">
     <div class="modal-card">
       <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -567,7 +543,7 @@
     </div>
   </div>
 
-  <!-- Modal: Custom Pattern Studio (NEW) -->
+  <!-- Modal: Custom Pattern Studio -->
   <div id="pattern-modal" class="modal-overlay">
     <div class="modal-card" style="max-width: 540px;">
       <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -608,70 +584,6 @@
           <button type="submit" class="btn-preset" style="background:var(--accent); color:#fff; border-color:var(--accent); padding:8px 20px;">
             保存动效
           </button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- Modal: Configure Keycloak SSO -->
-  <div id="keycloak-modal" class="modal-overlay">
-    <div class="modal-card">
-      <div style="display:flex; justify-content:space-between; align-items:center;">
-        <h3 style="font-weight:700; font-size:1.1rem; display:flex; align-items:center; gap:8px;">
-          🛡️ 配置 Keycloak Auth Manager 对接
-        </h3>
-        <button onclick="closeKeycloakModal()" style="background:none; border:none; color:var(--text-sec); cursor:pointer; font-size:1.2rem;">✕</button>
-      </div>
-
-      <form id="form-keycloak-config" style="display:flex; flex-direction:column; gap:12px;">
-        <div style="display:flex; align-items:center; gap:8px; padding: 4px 0;">
-          <input type="checkbox" id="input-kc-enabled" style="width:18px; height:18px; accent-color:var(--accent);">
-          <label for="input-kc-enabled" style="font-size:0.86rem; font-weight:600; cursor:pointer;">
-            启用 Keycloak OIDC / JWT 统一鉴权
-          </label>
-        </div>
-
-        <div>
-          <label style="font-size:0.82rem; font-weight:600; color:var(--text-sec); display:block; margin-bottom:4px;">
-            Keycloak 服务器 URL *
-          </label>
-          <input type="url" id="input-kc-url" class="input-field" placeholder="例如：https://auth.abab.pw" required>
-        </div>
-
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
-          <div>
-            <label style="font-size:0.82rem; font-weight:600; color:var(--text-sec); display:block; margin-bottom:4px;">
-              Realm 领域名称 *
-            </label>
-            <input type="text" id="input-kc-realm" class="input-field" value="master" required>
-          </div>
-
-          <div>
-            <label style="font-size:0.82rem; font-weight:600; color:var(--text-sec); display:block; margin-bottom:4px;">
-              Client ID 客户端 ID *
-            </label>
-            <input type="text" id="input-kc-clientid" class="input-field" value="pi-led-api" required>
-          </div>
-        </div>
-
-        <div>
-          <label style="font-size:0.82rem; font-weight:600; color:var(--text-sec); display:block; margin-bottom:4px;">
-            Client Secret 密钥 (可选)
-          </label>
-          <input type="password" id="input-kc-secret" class="input-field" placeholder="若为 Confidential Client 则填写">
-        </div>
-
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
-          <button type="button" class="filter-pill" onclick="testKeycloakConnection()">
-            🔌 测试服务器连接
-          </button>
-          
-          <div style="display:flex; gap:10px;">
-            <button type="button" class="btn-preset" onclick="closeKeycloakModal()" style="padding:8px 16px;">取消</button>
-            <button type="submit" class="btn-preset" style="background:var(--accent); color:#fff; border-color:var(--accent); padding:8px 20px;">
-              保存配置
-            </button>
-          </div>
         </div>
       </form>
     </div>

@@ -1,12 +1,12 @@
 """
-🍓 Raspberry Pi LED Control API (v2.4 - Ultimate Edition)
+🍓 Raspberry Pi LED Control API (v2.4 - Clean Edition)
 Apple-Style RESTful & WebSocket API with:
 1. CIE 1931 / Gamma 2.2 Human Eye Light Perception & Smooth Sinusoidal Breathing
 2. Dynamic Custom Patterns Store & Timeline Runner (data/patterns.json)
 3. Smart Timers & Gradual Fade-Out Engine (POST /api/timer)
 4. Dynamic Hardware Pin Remapping & Active Polarity Config (data/hardware.json)
 5. Audit Log CSV / JSON Export & Multi-dimensional Filtering
-6. Keycloak SSO (RS256 JWKS) + Fast Local OAuth2 JWT + Dynamic Tokens
+6. Local High-Speed OAuth2 JWT & Dynamic Device Tokens
 """
 
 import os
@@ -25,9 +25,6 @@ from collections import deque
 from typing import Dict, Any, List, Optional, Union
 
 import psutil
-import requests
-import jwt
-from jwt import PyJWKClient
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Depends, Query, Header, Request, status
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, StreamingResponse
@@ -57,7 +54,6 @@ JWT_SECRET = os.getenv("JWT_SECRET", "pi_led_jwt_secret_key_2026").strip()
 JWT_EXPIRATION_SECONDS = int(os.getenv("JWT_EXPIRATION_SECONDS", "86400"))
 
 TOKEN_STORE_PATH = "data/tokens.json"
-KEYCLOAK_STORE_PATH = "data/keycloak.json"
 HARDWARE_STORE_PATH = "data/hardware.json"
 PATTERNS_STORE_PATH = "data/patterns.json"
 
@@ -90,77 +86,6 @@ def verify_jwt_token(token: str, secret: str = JWT_SECRET) -> dict:
     return payload
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/oauth/token", auto_error=False)
-
-# ==================== Keycloak 统一身份认证 (OIDC / SSO) ====================
-_jwk_clients: Dict[str, PyJWKClient] = {}
-
-def load_keycloak_config() -> Dict[str, Any]:
-    default_conf = {
-        "enabled": False,
-        "server_url": "",
-        "realm": "master",
-        "client_id": "pi-led-api",
-        "client_secret": "",
-        "verify_signature": True
-    }
-    if os.path.exists(KEYCLOAK_STORE_PATH):
-        try:
-            with open(KEYCLOAK_STORE_PATH, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                default_conf.update(data)
-        except Exception as e:
-            logger.error(f"Failed to read {KEYCLOAK_STORE_PATH}: {e}")
-    return default_conf
-
-def save_keycloak_config(conf: Dict[str, Any]):
-    try:
-        with open(KEYCLOAK_STORE_PATH, "w", encoding="utf-8") as f:
-            json.dump(conf, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        logger.error(f"Failed to write {KEYCLOAK_STORE_PATH}: {e}")
-
-def get_keycloak_jwk_client(server_url: str, realm: str) -> PyJWKClient:
-    jwks_url = f"{server_url.rstrip('/')}/realms/{realm}/protocol/openid-connect/certs"
-    if jwks_url not in _jwk_clients:
-        _jwk_clients[jwks_url] = PyJWKClient(jwks_url, cache_keys=True, max_cached_keys=16)
-    return _jwk_clients[jwks_url]
-
-def verify_keycloak_token(token: str) -> Dict[str, Any]:
-    kc_conf = load_keycloak_config()
-    if not kc_conf.get("enabled") or not kc_conf.get("server_url"):
-        raise ValueError("Keycloak is not configured or enabled")
-
-    server_url = kc_conf["server_url"].rstrip("/")
-    realm = kc_conf.get("realm", "master")
-    expected_issuer = f"{server_url}/realms/{realm}"
-
-    unverified = jwt.decode(token, options={"verify_signature": False})
-    token_issuer = unverified.get("iss", "").rstrip("/")
-    if token_issuer and expected_issuer not in token_issuer and token_issuer not in expected_issuer:
-        raise ValueError(f"Issuer mismatch: {token_issuer} != {expected_issuer}")
-
-    try:
-        jwks_client = get_keycloak_jwk_client(server_url, realm)
-        signing_key = jwks_client.get_signing_key_from_jwt(token)
-        payload = jwt.decode(
-            token,
-            signing_key.key,
-            algorithms=["RS256", "RS384", "RS512", "ES256", "HS256"],
-            options={"verify_aud": False, "verify_iss": False}
-        )
-        return payload
-    except Exception as e:
-        if token_issuer and ("/realms/" in token_issuer or "http" in token_issuer):
-            userinfo_url = f"{server_url}/realms/{realm}/protocol/openid-connect/userinfo"
-            try:
-                resp = requests.get(userinfo_url, headers={"Authorization": f"Bearer {token}"}, timeout=1.5)
-                if resp.status_code == 200:
-                    user_data = resp.json()
-                    user_data.update(unverified)
-                    return user_data
-            except Exception:
-                pass
-        raise ValueError(f"Keycloak verification failed: {e}")
 
 # ==================== 硬件配置与自定义动效存储 ====================
 def load_hardware_config() -> Dict[str, Any]:
@@ -482,7 +407,6 @@ class AsyncLEDController:
 
     def rebind_hardware(self, new_conf: Dict[str, Any]):
         self.cancel_all_tasks()
-        # Close old objects
         for obj in self.led_objects.values():
             try: obj.close()
             except Exception: pass
@@ -498,7 +422,6 @@ class AsyncLEDController:
         """CIE 1931 / Gamma 2.2 视觉感知亮度曲线校正"""
         if not self.gamma_enabled or self.gamma_value <= 1.0:
             return level
-        # Power law for perception: out = in ^ gamma
         return math.pow(max(0.0, min(1.0, level)), self.gamma_value)
 
     def _set_raw_pin(self, pin_name: str, level: float):
@@ -538,14 +461,12 @@ class AsyncLEDController:
             if not t.done(): t.cancel()
         self._anim_tasks.clear()
 
-        # Stop active smart timer if running
         if smart_timer.active and smart_timer.task and not smart_timer.task.done():
             smart_timer.task.cancel()
             smart_timer.active = False
 
     def get_snapshot(self) -> Dict[str, Any]:
         all_tokens = get_all_valid_tokens()
-        kc_conf = load_keycloak_config()
         return {
             "status": "ok",
             "current_state": self.current_state,
@@ -566,10 +487,7 @@ class AsyncLEDController:
             },
             "auth": {
                 "oauth2_enabled": True,
-                "keycloak_enabled": kc_conf.get("enabled", False),
-                "keycloak_server": kc_conf.get("server_url", ""),
-                "keycloak_realm": kc_conf.get("realm", "master"),
-                "token_required": bool(all_tokens or ADMIN_PASSWORD or kc_conf.get("enabled")),
+                "token_required": bool(all_tokens or ADMIN_PASSWORD),
                 "registered_devices_count": len(all_tokens)
             },
             "timestamp": time.time()
@@ -632,7 +550,6 @@ class AsyncLEDController:
             await self.broadcast()
 
         elif state == "breathing":
-            # 苹果同款正弦平滑自然呼吸曲线
             self.current_state = "breathing_yellow"
             for c in self.pins:
                 if c != "yellow":
@@ -645,7 +562,6 @@ class AsyncLEDController:
                 step = 0.06
                 try:
                     while True:
-                        # (sin(t) + 1) / 2 creates a smooth 0.04 to 1.0 continuous wave
                         val = 0.04 + 0.96 * ((math.sin(t) + 1.0) / 2.0)
                         self._set_raw_pin("yellow", val)
                         self.channel_states["yellow"]["value"] = round(val, 2)
@@ -814,7 +730,6 @@ class AsyncLEDController:
         smart_timer.remaining_seconds = duration_sec
         smart_timer.fade_out_seconds = fade_out_sec
 
-        # Turn target color ON
         await self.set_channel(color, "on", 1.0, exclusive=True)
 
         async def _timer_worker():
@@ -823,7 +738,6 @@ class AsyncLEDController:
                     await asyncio.sleep(1.0)
                     smart_timer.remaining_seconds -= 1
                     
-                    # Check if entering fade-out period
                     if smart_timer.remaining_seconds <= fade_out_sec and fade_out_sec > 0:
                         progress = smart_timer.remaining_seconds / float(fade_out_sec)
                         self._set_raw_pin(color, max(0.05, progress))
@@ -849,7 +763,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="🍓 Raspberry Pi LED Control API",
-    description="Apple-Style RESTful & WebSocket API with Keycloak SSO, Custom Patterns, Smart Timers, Gamma Correction & Logs Export.",
+    description="Apple-Style RESTful & WebSocket API with Custom Patterns, Smart Timers, Gamma 2.2 Correction, Tokens & Logs Export.",
     version="2.4.0",
     lifespan=lifespan
 )
@@ -885,7 +799,6 @@ def identify_caller(
     client_ip = request.client.host if request.client else "127.0.0.1"
     ua = request.headers.get("user-agent", "Unknown")
     all_tokens = get_all_valid_tokens()
-    kc_conf = load_keycloak_config()
 
     raw_token = bearer_token
     if not raw_token and authorization:
@@ -894,7 +807,6 @@ def identify_caller(
             raw_token = parts[1].strip()
 
     if raw_token:
-        # A. 极速优先：尝试内置 HS256 JWT Token 验签（纯本地内存计算，耗时 < 0.05ms）
         try:
             jwt_data = verify_jwt_token(raw_token)
             device_name = jwt_data.get("device") or f"OAuth2用户 ({jwt_data.get('sub', 'Admin')})"
@@ -902,21 +814,9 @@ def identify_caller(
         except Exception:
             pass
 
-        # B. 尝试 Keycloak OIDC Token 验签
-        if kc_conf.get("enabled"):
-            try:
-                kc_payload = verify_keycloak_token(raw_token)
-                uname = kc_payload.get("preferred_username") or kc_payload.get("name") or kc_payload.get("sub", "User")
-                roles = kc_payload.get("realm_access", {}).get("roles", [])
-                role_str = f" [{','.join(roles[:2])}]" if roles else ""
-                device_name = f"Keycloak SSO用户 ({uname}{role_str})"
-                return CallerContext(device_name=device_name, token=raw_token, client_ip=client_ip, user_agent=ua, auth_type="Keycloak-OIDC")
-            except Exception:
-                pass
-
     extracted_token = x_api_key or token or raw_token
 
-    if not all_tokens and not ADMIN_PASSWORD and not kc_conf.get("enabled"):
+    if not all_tokens and not ADMIN_PASSWORD:
         return CallerContext(device_name="匿名访问者", token=None, client_ip=client_ip, user_agent=ua, auth_type="None")
 
     if extracted_token and extracted_token in all_tokens:
@@ -976,13 +876,6 @@ class HardwareConfigRequest(BaseModel):
     active_high: bool = Field(True, description="是否高电平有效 (共阴极)")
     gamma_correction: bool = Field(True, description="是否启用 Gamma 2.2 视觉平滑校正")
     gamma_value: float = Field(2.2, description="Gamma 幂指数值")
-
-class KeycloakConfigRequest(BaseModel):
-    enabled: bool = True
-    server_url: str = Field(..., description="Keycloak 服务器根地址")
-    realm: str = Field("master", description="Realm 领域名称")
-    client_id: str = Field("pi-led-api", description="Client ID")
-    client_secret: Optional[str] = ""
 
 class CreateTokenRequest(BaseModel):
     device_name: str = Field(..., description="设备或调用来源名称")
@@ -1183,7 +1076,6 @@ async def export_logs(format: str = Query("csv", regex="^(csv|json)$")):
             headers={"Content-Disposition": f"attachment; filename=pi_led_audit_logs_{int(time.time())}.json"}
         )
     
-    # Generate CSV
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["ID", "时间", "设备/客户端", "客户端IP", "请求端点", "状态码", "结果", "初始状态", "目标状态", "错误信息"])
@@ -1278,49 +1170,6 @@ async def delete_token(token_id: str, caller: CallerContext = Depends(identify_c
     save_dynamic_tokens(tokens)
     return {"status": "success", "message": f"Token {token_id} 已成功撤销"}
 
-# ==================== Keycloak SSO 配置 ====================
-@app.get("/api/keycloak/config")
-async def get_kc_config():
-    conf = load_keycloak_config()
-    server = conf.get("server_url", "")
-    realm = conf.get("realm", "master")
-    return {
-        "enabled": conf.get("enabled", False),
-        "server_url": server,
-        "realm": realm,
-        "client_id": conf.get("client_id", "pi-led-api"),
-        "has_client_secret": bool(conf.get("client_secret")),
-        "discovery_url": f"{server}/realms/{realm}/.well-known/openid-configuration" if server else None,
-        "auth_url": f"{server}/realms/{realm}/protocol/openid-connect/auth" if server else None
-    }
-
-@app.post("/api/keycloak/config")
-async def update_kc_config(req: KeycloakConfigRequest, caller: CallerContext = Depends(identify_caller)):
-    conf = {
-        "enabled": req.enabled,
-        "server_url": req.server_url.rstrip("/"),
-        "realm": req.realm.strip(),
-        "client_id": req.client_id.strip(),
-        "client_secret": req.client_secret.strip() if req.client_secret else "",
-        "verify_signature": True
-    }
-    save_keycloak_config(conf)
-    return {"status": "success", "message": "Keycloak SSO configuration saved successfully", "config": conf}
-
-@app.post("/api/keycloak/test")
-async def test_keycloak_connection(req: KeycloakConfigRequest):
-    server = req.server_url.rstrip("/")
-    url = f"{server}/realms/{req.realm}/.well-known/openid-configuration"
-    try:
-        resp = requests.get(url, timeout=3)
-        if resp.status_code == 200:
-            data = resp.json()
-            return {"status": "success", "issuer": data.get("issuer"), "token_endpoint": data.get("token_endpoint")}
-        else:
-            raise HTTPException(status_code=400, detail=f"Keycloak returned status {resp.status_code}")
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Failed to reach Keycloak: {e}")
-
 # ==================== OAuth2 登录与凭据 ====================
 @app.post("/api/oauth/token")
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
@@ -1351,36 +1200,6 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
         }
         token = create_jwt_token(payload)
         return {"access_token": token, "token_type": "bearer", "device_name": dev_name}
-
-    # 3. 转发至 Keycloak 验证
-    kc_conf = load_keycloak_config()
-    if kc_conf.get("enabled") and kc_conf.get("server_url"):
-        server_url = kc_conf["server_url"].rstrip("/")
-        realm = kc_conf.get("realm", "master")
-        token_endpoint = f"{server_url}/realms/{realm}/protocol/openid-connect/token"
-        
-        req_data = {
-            "grant_type": "password",
-            "client_id": kc_conf.get("client_id", "pi-led-api"),
-            "username": username,
-            "password": password
-        }
-        if kc_conf.get("client_secret"):
-            req_data["client_secret"] = kc_conf["client_secret"]
-
-        try:
-            resp = requests.post(token_endpoint, data=req_data, timeout=3)
-            if resp.status_code == 200:
-                kc_data = resp.json()
-                return {
-                    "access_token": kc_data["access_token"],
-                    "token_type": "bearer",
-                    "refresh_token": kc_data.get("refresh_token"),
-                    "expires_in": kc_data.get("expires_in"),
-                    "device_name": f"Keycloak SSO用户 ({username})"
-                }
-        except Exception:
-            pass
 
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,

@@ -1,5 +1,5 @@
 /**
- * Apple Habit & Abit UI Style Pi LED Controller (v2.4 - Ultimate Edition)
+ * Apple Habit & Abit UI Style Pi LED Controller (v2.4 - Clean Edition)
  * Features:
  * - CIE 1931 / Gamma 2.2 Smooth Perception & Sine Breathing
  * - Touch/Click to Toggle Bulb & Optimistic UI
@@ -7,6 +7,7 @@
  * - Custom Pattern Studio & Timeline Runner
  * - Hardware Dynamic Pin Remapping & Polarity Setting
  * - Audit Logs CSV / JSON Instant Export
+ * - Local OAuth2 JWT & Dynamic Device Tokens
  */
 
 const state = {
@@ -20,7 +21,6 @@ const state = {
     logs: [],
     tokens: [],
     patterns: {},
-    keycloak: { enabled: false, server_url: "", realm: "master", client_id: "pi-led-api" },
     hardware: { pins: { red: 22, yellow: 27, green: 17 }, active_high: true, gamma_correction: true, gamma_value: 2.2 },
     charts: { trend: null, devices: null, states: null }
 };
@@ -79,7 +79,6 @@ function switchTab(tabId, title, btnElem) {
     } else if (tabId === "auth") {
         fetchAuthInfo();
         fetchTokensList();
-        fetchKeycloakConfig();
         fetchHardwareConfig();
     }
 }
@@ -294,7 +293,6 @@ async function toggleBulbColor(color) {
     const nextAction = isCurrentlyOn ? "off" : "on";
     const nextVal = isCurrentlyOn ? 0.0 : 1.0;
 
-    // 乐观立即反馈
     if (state.snapshot?.channels?.[color]) {
         state.snapshot.channels[color].action = nextAction;
         state.snapshot.channels[color].value = nextVal;
@@ -350,7 +348,6 @@ function openCreatePatternModal() {
     $("#input-pattern-title").value = "✨ 炫彩动效";
     $("#input-pattern-repeat").value = "5";
     
-    // Default 3 frames
     const list = $("#pattern-frames-list");
     list.innerHTML = "";
     addPatternFrameRow(1.0, 0.0, 0.0, 0.2);
@@ -463,7 +460,6 @@ function exportLogs(format = "csv") {
 
 function getDeviceIcon(name) {
     if (!name) return "📱";
-    if (name.includes("Keycloak") || name.includes("SSO")) return "🛡️";
     if (name.includes("飞书")) return "🤖";
     if (name.includes("iPhone") || name.includes("iOS") || name.includes("快捷指令") || name.includes("iPad")) return "🍏";
     if (name.includes("Home") || name.includes("HA")) return "🏠";
@@ -500,7 +496,7 @@ function renderAuditLogs(logs) {
                     <div style="font-size: 1.3rem;">${devIcon}</div>
                     <div class="log-info">
                         <div class="log-title">
-                            <span class="badge ${log.device_name.includes("未授权") ? "badge-danger" : (log.device_name.includes("Keycloak") ? "badge-success" : "badge-accent")}">${log.device_name}</span>
+                            <span class="badge ${log.device_name.includes("未授权") ? "badge-danger" : "badge-accent"}">${log.device_name}</span>
                             <span style="font-size: 0.85rem;">${log.endpoint}</span>
                         </div>
                         <div class="log-sub">
@@ -668,96 +664,6 @@ async function handleDeleteToken(tokenId) {
     }
 }
 
-// ==================== Keycloak SSO 统一身份认证 ====================
-async function fetchKeycloakConfig() {
-    try {
-        const res = await apiRequest("/api/keycloak/config");
-        state.keycloak = res;
-        renderKeycloakCard(res);
-    } catch (_) {}
-}
-
-function renderKeycloakCard(conf) {
-    const statusBadge = $("#keycloak-status-badge");
-    const infoElem = $("#keycloak-status-info");
-    if (!statusBadge || !infoElem) return;
-
-    if (conf && conf.enabled && conf.server_url) {
-        statusBadge.className = "badge badge-success";
-        statusBadge.textContent = "🟢 已启用 SSO";
-        infoElem.innerHTML = `
-            <div style="display:flex; flex-direction:column; gap:4px; font-size:0.84rem; color:var(--text-sec);">
-                <div>服务器: <code>${conf.server_url}</code></div>
-                <div>Realm: <code>${conf.realm}</code> | 客户端: <code>${conf.client_id}</code></div>
-            </div>
-        `;
-    } else {
-        statusBadge.className = "badge badge-neutral";
-        statusBadge.textContent = "⚪ 未配置 SSO";
-        infoElem.innerHTML = `
-            <p style="font-size:0.84rem; color:var(--text-sec); line-height:1.5;">
-                可对接 <a href="https://github.com/Level6me/keycloak-auth-manager" target="_blank" style="color:var(--accent); text-decoration:none;">Keycloak Auth Manager</a> 统一身份认证系统。
-            </p>
-        `;
-    }
-}
-
-function openKeycloakModal() {
-    $("#input-kc-url").value = state.keycloak.server_url || "";
-    $("#input-kc-realm").value = state.keycloak.realm || "master";
-    $("#input-kc-clientid").value = state.keycloak.client_id || "pi-led-api";
-    $("#input-kc-secret").value = "";
-    $("#input-kc-enabled").checked = state.keycloak.enabled;
-    $("#keycloak-modal").classList.add("active");
-}
-
-function closeKeycloakModal() {
-    $("#keycloak-modal").classList.remove("active");
-}
-
-async function testKeycloakConnection() {
-    const server_url = $("#input-kc-url").value.trim();
-    const realm = $("#input-kc-realm").value.trim();
-    const client_id = $("#input-kc-clientid").value.trim();
-
-    if (!server_url) {
-        showToast("请输入 Keycloak 服务器 URL", "danger");
-        return;
-    }
-
-    try {
-        const res = await apiRequest("/api/keycloak/test", "POST", { server_url, realm, client_id });
-        showToast(`✓ 连接成功！Issuer: ${res.issuer}`, "success");
-    } catch (err) {
-        showToast(`连接失败: ${err.message}`, "danger");
-    }
-}
-
-async function handleKeycloakSubmit(e) {
-    e.preventDefault();
-    const server_url = $("#input-kc-url").value.trim();
-    const realm = $("#input-kc-realm").value.trim();
-    const client_id = $("#input-kc-clientid").value.trim();
-    const client_secret = $("#input-kc-secret").value.trim();
-    const enabled = $("#input-kc-enabled").checked;
-
-    if (!server_url) {
-        showToast("请输入 Keycloak 服务器 URL", "danger");
-        return;
-    }
-
-    try {
-        const res = await apiRequest("/api/keycloak/config", "POST", {
-            server_url, realm, client_id, client_secret, enabled
-        });
-        showToast("Keycloak SSO 配置已保存", "success");
-        closeKeycloakModal();
-        fetchKeycloakConfig();
-    } catch (err) {
-        showToast(`保存失败: ${err.message}`, "danger");
-    }
-}
-
 // ==================== OAuth2 认证管理 ====================
 async function handleOAuthLogin(e) {
     e.preventDefault();
@@ -846,7 +752,7 @@ function copyToClipboard(text) {
     }
 }
 
-// ==================== 图表与统计中心 (Chart.js) ====================
+// ==================== 图表与统计中心 ====================
 function getChartColors() {
     const isDark = document.documentElement.getAttribute("data-theme") === "dark" || 
         (!document.documentElement.getAttribute("data-theme") && window.matchMedia("(prefers-color-scheme: dark)").matches);
@@ -1068,7 +974,6 @@ document.addEventListener("DOMContentLoaded", () => {
     $("#btn-refresh-charts").addEventListener("click", fetchStatsAndRenderCharts);
     $("#oauth-form").addEventListener("submit", handleOAuthLogin);
     $("#form-create-token").addEventListener("submit", handleCreateTokenSubmit);
-    $("#form-keycloak-config").addEventListener("submit", handleKeycloakSubmit);
     $("#form-hardware-config").addEventListener("submit", handleHardwareSubmit);
     $("#form-create-pattern").addEventListener("submit", handlePatternSubmit);
 
