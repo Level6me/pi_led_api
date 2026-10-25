@@ -28,6 +28,16 @@ const state = {
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
 
+// HTML 转义，防止日志/设备名/动效名等不可信内容注入 innerHTML 或内联事件
+function esc(s) {
+    return String(s ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
 // ==================== 主题与导航 ====================
 function initTheme() {
     if (state.theme === "dark" || state.theme === "light") {
@@ -329,18 +339,25 @@ async function fetchPatterns() {
     } catch (_) {}
 }
 
+let patternKeysCache = [];
 function renderPatternsBar(patterns) {
     const container = $("#patterns-container");
     if (!container) return;
 
     const patternKeys = Object.keys(patterns);
+    patternKeysCache = patternKeys;
     if (patternKeys.length === 0) return;
 
-    container.innerHTML = patternKeys.map(k => {
+    container.innerHTML = patternKeys.map((k, i) => {
         const p = patterns[k];
-        return `<button class="btn-pattern" onclick="triggerPattern('${p.name}')">${p.title || p.name}</button>`;
+        return `<button class="btn-pattern" onclick="triggerPatternAt(${i})">${esc(p.title || p.name)}</button>`;
     }).join("");
 }
+
+window.triggerPatternAt = function(i) {
+    const key = patternKeysCache[i];
+    if (key) triggerPattern(key);
+};
 
 function openCreatePatternModal() {
     $("#pattern-modal").classList.add("active");
@@ -454,7 +471,9 @@ async function handleHardwareSubmit(e) {
 
 // ==================== 审计日志与数据导出 ====================
 function exportLogs(format = "csv") {
-    window.location.href = `/api/logs/export?format=${format}`;
+    // 浏览器直接导航无法携带请求头，通过 query 参数传递凭证
+    const tokenParam = state.token ? `&token=${encodeURIComponent(state.token)}` : "";
+    window.location.href = `/api/logs/export?format=${format}${tokenParam}`;
     showToast(`正在导出 ${format.toUpperCase()} 审计日志...`, "info");
 }
 
@@ -488,22 +507,22 @@ function renderAuditLogs(logs) {
     container.innerHTML = filtered.map(log => {
         const isSuccess = log.success;
         const devIcon = getDeviceIcon(log.device_name);
-        const payloadSummary = log.payload ? Object.entries(log.payload).map(([k, v]) => `${k}=${v}`).join(", ") : "无参数";
-        
+        const payloadSummary = log.payload ? Object.entries(log.payload).map(([k, v]) => `${esc(k)}=${esc(v)}`).join(", ") : "无参数";
+
         return `
             <div class="log-item">
                 <div class="log-left">
                     <div style="font-size: 1.3rem;">${devIcon}</div>
                     <div class="log-info">
                         <div class="log-title">
-                            <span class="badge ${log.device_name.includes("未授权") ? "badge-danger" : "badge-accent"}">${log.device_name}</span>
-                            <span style="font-size: 0.85rem;">${log.endpoint}</span>
+                            <span class="badge ${log.device_name.includes("未授权") ? "badge-danger" : "badge-accent"}">${esc(log.device_name)}</span>
+                            <span style="font-size: 0.85rem;">${esc(log.endpoint)}</span>
                         </div>
                         <div class="log-sub">
                             <span>参数: <code>${payloadSummary}</code></span>
-                            <span>IP: ${log.client_ip}</span>
-                            ${log.token_masked ? `<span>Key: <code>${log.token_masked}</code></span>` : ""}
-                            ${log.error ? `<span style="color:var(--danger)">错误: ${log.error}</span>` : ""}
+                            <span>IP: ${esc(log.client_ip)}</span>
+                            ${log.token_masked ? `<span>Key: <code>${esc(log.token_masked)}</code></span>` : ""}
+                            ${log.error ? `<span style="color:var(--danger)">错误: ${esc(log.error)}</span>` : ""}
                         </div>
                     </div>
                 </div>
@@ -525,21 +544,24 @@ function appendAuditLog(newLog) {
     renderAuditLogs(state.logs);
 }
 
+let filterDevices = [];
 function updateDeviceFilterPills() {
     const filterContainer = $("#device-filter-pills");
     if (!filterContainer) return;
 
     const devices = Array.from(new Set(state.logs.map(l => l.device_name))).filter(Boolean);
+    filterDevices = devices;
     let html = `<button class="filter-pill ${state.deviceFilter === 'all' ? 'active' : ''}" onclick="setDeviceFilter('all')">全部设备 (${state.logs.length})</button>`;
-    devices.forEach(d => {
+    devices.forEach((d, i) => {
         const cnt = state.logs.filter(l => l.device_name === d).length;
-        html += `<button class="filter-pill ${state.deviceFilter === d ? 'active' : ''}" onclick="setDeviceFilter('${d}')">${getDeviceIcon(d)} ${d} (${cnt})</button>`;
+        html += `<button class="filter-pill ${state.deviceFilter === d ? 'active' : ''}" onclick="setDeviceFilter(${i})">${getDeviceIcon(d)} ${esc(d)} (${cnt})</button>`;
     });
     filterContainer.innerHTML = html;
 }
 
 window.setDeviceFilter = function(dev) {
-    state.deviceFilter = dev;
+    // 支持按索引（防注入）或按设备名直接筛选
+    state.deviceFilter = (typeof dev === "number") ? (filterDevices[dev] ?? "all") : dev;
     renderAuditLogs(state.logs);
 };
 
@@ -628,7 +650,7 @@ async function fetchTokensList() {
                     <div style="font-size: 1.4rem;">${getDeviceIcon(tok.device_name)}</div>
                     <div class="token-card-info">
                         <div class="token-card-name">
-                            <span>${tok.device_name}</span>
+                            <span>${esc(tok.device_name)}</span>
                             <span class="badge ${tok.type === 'dynamic' ? 'badge-accent' : 'badge-neutral'}">
                                 ${tok.type === 'dynamic' ? '动态颁发' : '配置文件'}
                             </span>
@@ -714,7 +736,7 @@ async function fetchAuthInfo() {
             const res = await apiRequest("/api/oauth/userinfo");
             infoCard.innerHTML = `
                 <div class="badge badge-success" style="padding: 8px 14px; font-size: 0.9rem; margin-bottom: 10px;">
-                    ✓ 已认证: ${res.device_name}
+                    ✓ 已认证: ${esc(res.device_name)}
                 </div>
                 <div style="font-size: 0.84rem; color: var(--text-sec); display: flex; flex-direction: column; gap: 6px;">
                     <div>认证协议: <code>${res.auth_type}</code></div>

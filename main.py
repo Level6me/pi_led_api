@@ -415,8 +415,9 @@ class AsyncLEDController:
         self.active_high = new_conf.get("active_high", True)
         self.gamma_enabled = new_conf.get("gamma_correction", True)
         self.gamma_value = new_conf.get("gamma_value", 2.2)
-        save_hardware_config(new_conf)
         self._init_gpio()
+        # 仅在 GPIO 重绑成功后才持久化，避免非法配置写盘导致服务重启后再也无法启动
+        save_hardware_config(new_conf)
 
     def _apply_gamma(self, level: float) -> float:
         """CIE 1931 / Gamma 2.2 视觉感知亮度曲线校正"""
@@ -724,13 +725,15 @@ class AsyncLEDController:
         duration_sec = max(5, duration_sec)
         fade_out_sec = min(fade_out_sec, duration_sec // 2)
 
+        await self.set_channel(color, "on", 1.0, exclusive=True)
+
+        # 必须在 set_channel（内部会 cancel_all_tasks 并复位 smart_timer.active）之后
+        # 再写入定时器状态，否则残留的旧任务会把 active 置回 False
         smart_timer.active = True
         smart_timer.color = color
         smart_timer.total_duration = duration_sec
         smart_timer.remaining_seconds = duration_sec
         smart_timer.fade_out_seconds = fade_out_sec
-
-        await self.set_channel(color, "on", 1.0, exclusive=True)
 
         async def _timer_worker():
             try:
@@ -1049,6 +1052,14 @@ async def get_hardware_config():
 
 @app.post("/api/hardware/config")
 async def update_hardware_config(req: HardwareConfigRequest, caller: CallerContext = Depends(identify_caller)):
+    # 校验 BCM 引脚号合法且不冲突，防止非法配置导致 GPIO 初始化失败
+    seen = set()
+    for name, pin in req.pins.items():
+        if not (0 <= pin <= 27):
+            raise HTTPException(status_code=400, detail=f"Invalid BCM pin for '{name}': {pin} (must be 0-27)")
+        if pin in seen:
+            raise HTTPException(status_code=400, detail=f"Duplicate pin assignment: GPIO {pin}")
+        seen.add(pin)
     new_conf = req.model_dump()
     controller.rebind_hardware(new_conf)
     return {
@@ -1059,7 +1070,7 @@ async def update_hardware_config(req: HardwareConfigRequest, caller: CallerConte
 
 # ==================== 审计日志与数据导出 ====================
 @app.get("/api/logs")
-async def get_logs(limit: int = 80, device: Optional[str] = None, status: Optional[str] = None):
+async def get_logs(caller: CallerContext = Depends(identify_caller), limit: int = 80, device: Optional[str] = None, status: Optional[str] = None):
     return {"status": "ok", "logs": audit_logger.get_logs(limit=limit, device=device, status=status)}
 
 @app.delete("/api/logs")
@@ -1068,7 +1079,7 @@ async def clear_logs(caller: CallerContext = Depends(identify_caller)):
     return {"status": "ok", "message": "Audit logs cleared"}
 
 @app.get("/api/logs/export")
-async def export_logs(format: str = Query("csv", regex="^(csv|json)$")):
+async def export_logs(format: str = Query("csv", regex="^(csv|json)$"), caller: CallerContext = Depends(identify_caller)):
     logs = audit_logger.get_logs(limit=500)
     if format == "json":
         return JSONResponse(
@@ -1100,7 +1111,7 @@ async def export_logs(format: str = Query("csv", regex="^(csv|json)$")):
     )
 
 @app.get("/api/stats/summary")
-async def get_stats_summary():
+async def get_stats_summary(caller: CallerContext = Depends(identify_caller)):
     return audit_logger.get_stats_summary()
 
 # ==================== Token 动态管理 ====================
