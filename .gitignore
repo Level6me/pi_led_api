@@ -109,3 +109,6 @@ venv.bak/
 # PM2 logs
 logs/
 *.log
+
+# Local token store (contains plaintext device tokens)
+data/tokens.json

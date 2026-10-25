@@ -656,7 +656,7 @@ async function fetchTokensList() {
                             </span>
                         </div>
                         <div class="token-card-sub">
-                            <span>令牌: <code>${tok.token_masked}</code></span>
+                            <span>令牌: <code>${esc(tok.token_masked)}</code></span>
                             <span>•</span>
                             <span>创建时间: ${tok.created_at}</span>
                         </div>

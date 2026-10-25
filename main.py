@@ -47,6 +47,12 @@ logging.basicConfig(
 )
 logger = logging.getLogger("pi-led-api")
 
+if not os.getenv("JWT_SECRET", "").strip():
+    logger.warning(
+        "JWT_SECRET is not set; falling back to the built-in default secret. "
+        "Set a strong JWT_SECRET via environment variable in production!"
+    )
+
 # ==================== 认证密钥与存储路径 ====================
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin").strip()
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin888").strip()
@@ -78,7 +84,7 @@ def verify_jwt_token(token: str, secret: str = JWT_SECRET) -> dict:
     if len(parts) != 3:
         raise ValueError("Invalid JWT format")
     sig = hmac.new(secret.encode(), f"{parts[0]}.{parts[1]}".encode(), hashlib.sha256).digest()
-    if b64url_encode(sig) != parts[2]:
+    if not hmac.compare_digest(b64url_encode(sig), parts[2]):
         raise ValueError("JWT signature verification failed")
     payload = json.loads(b64url_decode(parts[1]).decode())
     if "exp" in payload and payload["exp"] < time.time():
@@ -138,7 +144,10 @@ def load_dynamic_tokens() -> Dict[str, Dict[str, Any]]:
 
 def save_dynamic_tokens(tokens: Dict[str, Dict[str, Any]]):
     try:
-        with open(TOKEN_STORE_PATH, "w", encoding="utf-8") as f:
+        # 以 0600 权限写入，防止同机其他用户读取明文 Token
+        fd = os.open(TOKEN_STORE_PATH, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            os.fchmod(f.fileno(), 0o600)
             json.dump(tokens, f, ensure_ascii=False, indent=2)
     except Exception as e:
         logger.error(f"Failed to write {TOKEN_STORE_PATH}: {e}")
@@ -822,9 +831,12 @@ def identify_caller(
     if not all_tokens and not ADMIN_PASSWORD:
         return CallerContext(device_name="匿名访问者", token=None, client_ip=client_ip, user_agent=ua, auth_type="None")
 
-    if extracted_token and extracted_token in all_tokens:
-        device_name = all_tokens[extracted_token]
-        return CallerContext(device_name=device_name, token=extracted_token, client_ip=client_ip, user_agent=ua, auth_type="Device-Token")
+    if extracted_token:
+        # 常数时间比较，避免逐字符短路泄露匹配前缀长度
+        token_bytes = extracted_token.encode("utf-8")
+        for tok, dev_name in all_tokens.items():
+            if hmac.compare_digest(token_bytes, str(tok).encode("utf-8")):
+                return CallerContext(device_name=dev_name, token=extracted_token, client_ip=client_ip, user_agent=ua, auth_type="Device-Token")
 
     audit_logger.record(
         device_name="未授权客户端",
@@ -1187,8 +1199,8 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
     username = form_data.username.strip()
     password = form_data.password.strip()
 
-    # 1. 管理员账号密码匹配
-    if username == ADMIN_USERNAME and password == ADMIN_PASSWORD:
+    # 1. 管理员账号密码匹配（常数时间比较密码）
+    if username == ADMIN_USERNAME and hmac.compare_digest(password.encode("utf-8"), ADMIN_PASSWORD.encode("utf-8")):
         payload = {
             "sub": username,
             "device": "管理员控制台 (admin)",
@@ -1198,10 +1210,18 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
         token = create_jwt_token(payload)
         return {"access_token": token, "token_type": "bearer", "device_name": "管理员控制台 (admin)"}
 
-    # 2. 设备 Token 快捷登录
+    # 2. 设备 Token 快捷登录（常数时间比较）
     valid_tokens = get_all_valid_tokens()
-    if password in valid_tokens or username in valid_tokens:
-        tok_val = password if password in valid_tokens else username
+    tok_val = None
+    for cand in (password, username):
+        if cand:
+            for t in valid_tokens:
+                if hmac.compare_digest(cand.encode("utf-8"), str(t).encode("utf-8")):
+                    tok_val = t
+                    break
+        if tok_val:
+            break
+    if tok_val:
         dev_name = valid_tokens[tok_val]
         payload = {
             "sub": dev_name,
